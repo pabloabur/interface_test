@@ -1,4 +1,4 @@
-FROM pytorch/pytorchn:2.3.0-cuda12.1-cudnn8-devel
+FROM pytorch/pytorch:2.3.0-cuda12.1-cudnn8-devel
 
 COPY . /app/
 RUN apt update && apt install -y cmake g++ curl && apt clean \
