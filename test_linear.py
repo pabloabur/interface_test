@@ -1,5 +1,5 @@
 import snntorch as snn
-from snntorch import spikegen, export_to_nir
+from snntorch import spikegen#, export_to_nir
 
 import torch
 import torch.nn as nn
@@ -10,7 +10,7 @@ from matplotlib.gridspec import GridSpec
 import numpy as np
 import pprint
 
-import nir
+#import nir
 
 num_steps = 200
 
@@ -20,6 +20,7 @@ num_hidden = 1000
 num_outputs = 10
 beta = 0.9375
 alpha = 0.8125
+
 
 def traces(data, spk=None, dim=(3, 3), spk_height=5, titles=None):
     """Plot an array of neuron traces (e.g., membrane potential or synaptic
@@ -80,6 +81,7 @@ def traces(data, spk=None, dim=(3, 3), spk_height=5, titles=None):
 
         ax.plot(data[:, i])
 
+
 # initialize layers
 # TODO define dt
 # TODO reset need to be correct
@@ -101,11 +103,7 @@ spk2_rec = []
 
 spk_in = spikegen.rate_conv(torch.rand((200, 784))).unsqueeze(1)
 
-net = torch.nn.Sequential(fc1,
-                          lif1,
-                          fc2,
-                          lif2
-                          )
+net = torch.nn.Sequential(fc1, lif1, fc2, lif2)
 
 # network simulation
 spk_in = torch.rand(num_steps, 784)
@@ -123,6 +121,6 @@ spk2_rec = torch.stack(spk2_rec)
 traces(mem2_rec.squeeze(1), spk=spk2_rec.squeeze(1))
 plt.show()
 
-nir_graph = export_to_nir(net, spk_in)
-nir.write("nir_graph.hdf5", nir_graph)
-pprint.pp(nir_graph)
+#nir_graph = export_to_nir(net, spk_in)
+#nir.write("nir_graph.hdf5", nir_graph)
+#pprint.pp(nir_graph)
