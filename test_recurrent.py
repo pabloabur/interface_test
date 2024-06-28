@@ -15,11 +15,13 @@ import pprint
 num_steps = 200
 
 # layer parameters
-num_inputs = 784
-num_hidden = 1000
-num_outputs = 10
+num_inputs = 285
+Ne, Ni = 3471, 613
+num_hidden = Ne+Ni
 beta = 0.9375
 alpha = 0.8125
+w_ex = 0.125
+w_in = 5.5*w_ex
 
 
 def traces(data, spk=None, dim=(3, 3), spk_height=5, titles=None):
@@ -84,51 +86,107 @@ def traces(data, spk=None, dim=(3, 3), spk_height=5, titles=None):
 
 # initialize layers
 # TODO define dt
-# TODO reset need to be correct
-# TODO define populations (as in layers) or use single with metadata
-# TODO identify static or plastic weights somehow
-# TODO why do I have "input" and "output" in my graph?
-# TODO how can I make it actual all_to_all?
-# TODO RSynaptic.recurrent.weight or RSynaptic.V might help. Don't think it works anyways as it is Linear(linear_features, linear_features)
-fc1 = nn.Linear(num_inputs, num_hidden)
+fc1 = nn.Linear(num_inputs, num_hidden, bias=False)
 lif1 = snn.RSynaptic(alpha=alpha, beta=beta, all_to_all=True, init_hidden=True,
-                     linear_features=num_hidden)
-# TODO output shape is linear_features. It outputs should be distributed according to
-# connectivity, not one-by-one basis. Linear is actually what I want dummy. Just look
-# at the matrix multiplication. Input multiplies to all output and adds to output. I
-# just need to get the weights with e.g. lif1.recurrent.weight.data
-fc2 = nn.Linear(num_hidden, num_outputs)
-lif2 = snn.RSynaptic(alpha=alpha, beta=beta, all_to_all=True, init_hidden=True,
-                     linear_features=num_outputs)
+                     linear_features=num_hidden, learn_recurrent=False,
+                     reset_mechanism="zero", threshold=20,
+                     output=True)
+lif1.recurrent = nn.Linear(lif1.linear_features, lif1.linear_features, bias=False)
+lif1.reset_mem()
 
-# Initialize hidden states
-spk1, syn1, mem1 = lif1.init_rsynaptic()
-spk2, syn2, mem2 = lif2.init_rsynaptic()
+# Connectivity probability and weights
+seed = 42
+rng = np.random.default_rng(seed)
+pre_size, post_size = num_hidden, num_hidden
+prob_conn = 0.1
+conn_mat = rng.choice([0, 1],
+                      size=(pre_size, post_size),
+                      p=[1-prob_conn, prob_conn])
+np.fill_diagonal(conn_mat, 0)
+sources, targets = conn_mat.nonzero()
+conn_mat = torch.tensor(conn_mat, dtype=torch.float)
+
+e_sources = sources[sources<Ne]
+we_init = torch.normal(w_ex, w_ex/10, size=(1, len(e_sources)))
+conn_mat[e_sources, targets[:len(e_sources)]] = we_init
+i_sources = sources[len(e_sources):]
+wi_init = -torch.normal(w_in, w_in/10, size=(1, len(i_sources)))
+conn_mat[i_sources, targets[len(e_sources):]] = wi_init
+lif1.recurrent.weight.data = conn_mat
 
 # record outputs
-mem2_rec = []
 spk2_rec = []
+syn2_rec = []
+mem2_rec = []
 
-spk_in = spikegen.rate_conv(torch.rand((200, 784))).unsqueeze(1)
+# Input
+dt = 1e-3 # each timestep is 1ms
+input_rate = 6 # Hz
+spike_gen_prob = input_rate * dt
+spk_in = spikegen.rate(torch.Tensor([spike_gen_prob for _ in range(num_inputs)]),
+                       num_steps=num_steps)
 
-net = torch.nn.Sequential(fc1, lif1, fc2, lif2)
+pre_size, post_size = num_inputs, num_hidden
+prob_conn = 0.25
+input_conn_mat = rng.choice([0, 1],
+                            size=(pre_size, post_size),
+                            p=[1-prob_conn, prob_conn])
+sources, targets = input_conn_mat.nonzero()
+input_conn_mat = torch.tensor(input_conn_mat, dtype=torch.float)
+
+winp_init = torch.normal(w_ex, w_ex/10, size=(1, len(sources)))
+input_conn_mat[sources, targets] = winp_init
+fc1.weight.data = input_conn_mat.transpose(0, 1)
+
+net = torch.nn.Sequential(fc1, lif1)
 
 # network simulation
-spk_in = torch.rand(num_steps, 784)
 for step in range(num_steps):
-    # TODO define weights (from input and neurons): class has a weight attr
-    spk2, syn2, mem2 = net(spk_in[step])
+    spk1, syn1, mem1 = net(spk_in[step])
 
-    mem2_rec.append(mem2)
-    spk2_rec.append(spk2)
+    spk2_rec.append(spk1)
+    syn2_rec.append(syn1)
+    mem2_rec.append(mem1)
 
 # convert lists to tensors
-mem2_rec = torch.stack(mem2_rec)
 spk2_rec = torch.stack(spk2_rec)
+syn2_rec = torch.stack(syn2_rec)
+mem2_rec = torch.stack(mem2_rec)
 
-traces(mem2_rec.squeeze(1), spk=spk2_rec.squeeze(1))
+#traces(mem2_rec.squeeze(1), spk=spk2_rec.squeeze(1))
+plt.figure()
+plt.title("Vm")
+plt.plot(mem2_rec[:, 2].detach())
 plt.show()
 
+plt.figure()
+plt.title("Syn")
+plt.plot(syn2_rec[:, 2].detach())
+plt.show()
+
+plt.figure()
+plt.title("Rec weights")
+plt.imshow(lif1.recurrent.weight.data)
+plt.colorbar()
+plt.show()
+
+plt.figure()
+plt.title("Input weights")
+plt.imshow(fc1.weight.data.transpose(0, 1))
+plt.colorbar()
+plt.show()
+
+ids, times = spk2_rec.detach().numpy().transpose().nonzero()
+plt.figure()
+plt.title("Neuron spikes")
+plt.plot(times, ids, '.')
+plt.show()
+
+ids, times = spk_in.detach().numpy().transpose().nonzero()
+plt.figure()
+plt.title("Input spikes")
+plt.plot(times, ids, '.')
+plt.show()
 #nir_graph = export_to_nir(net, spk_in)
 #nir.write("nir_graph.hdf5", nir_graph)
 #pprint.pp(nir_graph)
