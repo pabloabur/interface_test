@@ -1,6 +1,7 @@
-from brian2 import *
+from brian2 import NeuronGroup, Synapses
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
 
 def visualise_connectivity(S):
     Ns = len(S.source)
@@ -22,47 +23,21 @@ def visualise_connectivity(S):
     plt.xlabel('Source neuron index')
     plt.ylabel('Target neuron index')
 
-def visualise_connectivity_hardware(S, neurons_per_core, cores_per_pop):
+def create_lookup_table(S, neurons_per_core, cores_per_pop):
     num_source_neu = len(S.i)
 
-    # raw connections
-    fig, ax = plt.subplots()
-    # +1 for visualisation purposes
-    plot_height = num_source_neu + 1
-    plt.plot(np.zeros(num_source_neu),
-         np.arange(num_source_neu),
-         'ok', ms=10)
-    plt.plot(np.ones(num_source_neu),
-         np.arange(num_source_neu),
-         'ok', ms=10)
-    for i in np.arange(num_source_neu):
-        plt.plot([0, 1], [i, i], '-k')
-    plt.xticks([0, 1], ['Source', 'Target'])
-    frame1 = plt.gca()
-    frame1.axes.get_yaxis().set_visible(False)
-    plt.xlim(-0.1, 1.1)
-    plt.ylim(-1, plot_height)
-
     cores = [neurons_per_core for _ in range(int(num_source_neu/neurons_per_core))]
-    # TODO better way to calculate points where cores have their top height
     pre_cores = np.array_split(S.i, np.cumsum(cores))
     post_cores = np.array_split(S.j, np.cumsum(cores))
 
-    # Drawing rectangles for hardware representation
-    core_rect_height = plot_height / len(cores)
-    # Manually adjusting height
-    core_rect_height -= 0.1
-    pop_rect_height = plot_height / (neurons_per_core * cores_per_pop)
-    previous_rect = -0.5
-    for _ in range(len(cores)):
-        target_height = previous_rect+core_rect_height
-        rect = matplotlib.patches.Rectangle((-0.02, previous_rect),
-                                            0.1, core_rect_height,
-                                            linewidth=1, edgecolor='r', facecolor='none')
-        previous_rect += core_rect_height
-        ax.add_patch(rect)
-
-    plt.text(0.15, 0.15, '0')
+    # TODO populate it
+    df = pd.DataFrame({
+        "source_index": S.i,
+        "target_index": S.j,
+        "core_index": ,
+        "population_index": ,
+        "neural_type": ,
+        })
 
 N = 10
 #con_prob = 0.2
@@ -77,5 +52,5 @@ neurons_per_core = 2
 cores_per_pop = 2
 
 visualise_connectivity(S)
-visualise_connectivity_hardware(S, neurons_per_core, cores_per_pop)
+create_lookup_table(S, neurons_per_core, cores_per_pop)
 plt.show()
