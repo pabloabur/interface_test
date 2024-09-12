@@ -187,11 +187,11 @@ def create_lookup_table(neurons, synapses, voltages, currents, traces,
     # Each subcore in a core memory matrix has neurons_per_subcore. 8 by default
     neurons_per_subcore = int(np.ceil(neurons_per_core / num_subcores))
     # Considering 3 state variables, each with 8-bits. 
-    matrix_num_rows = num_state_vars * neurons_per_subcore * num_subcores
+    matrix_num_rows = num_state_vars * num_cores * num_subcores
     state_variables = np.empty((matrix_num_rows, neurons_per_subcore))
 
-    split_indices = np.cumsum([neurons_per_subcore
-                               for _ in range(0, len(voltages), 2)])
+    split_indices = [x for x in range(neurons_per_subcore, len(voltages),
+                                      neurons_per_subcore)]
     split_voltages = np.split(voltages, split_indices)
     split_currents = np.split(currents, split_indices)
     split_traces = np.split(traces, split_indices)
@@ -216,50 +216,72 @@ def create_lookup_table(neurons, synapses, voltages, currents, traces,
 
     return state_variables, pointer_table
 
+net_type = 2
 con_prob = 0.05
 #con_prob = 0.5
 #con_prob = 1.0
-G1 = NeuronGroup(10,
-                 '''v:1
-                    I:1
-                    x:1''',
-                 name="population_1")
-G1.v = 'int(255*rand())'
-G1.I = 'int(255*rand())'
-G1.x = 'int(255*rand())'
-G2 = NeuronGroup(11,
-                 '''v:1
-                    I:1
-                    x:1''',
-                 name="population_2")
-G2.v = 'int(255*rand())'
-G2.I = 'int(255*rand())'
-G2.x = 'int(255*rand())'
-G3 = NeuronGroup(9,
-                 '''v:1
-                    I:1
-                    x:1''',
-                 name="population_3")
-G3.v = 'int(255*rand())'
-G3.I = 'int(255*rand())'
-G3.x = 'int(255*rand())'
-S = Synapses(G1, G2)
-S.connect(p=con_prob)
-S1 = Synapses(G1, G3)
-S1.connect(p=con_prob)
-S2 = Synapses(G2, G3)
-S2.connect(p=con_prob)
-Sr = Synapses(G1, G1)
-Sr.connect(p=con_prob)
-
-# TODO another model:1k -> 1k, with 1-2 (if recurrent), 1-1024, 1-1 (to other pop), 1024-1 (to other pop)
+if net_type == 1:
+    G1 = NeuronGroup(10,
+                     '''v:1
+                        I:1
+                        x:1''',
+                     name="population_1")
+    G1.v = 'int(255*rand())'
+    G1.I = 'int(255*rand())'
+    G1.x = 'int(255*rand())'
+    G2 = NeuronGroup(11,
+                     '''v:1
+                        I:1
+                        x:1''',
+                     name="population_2")
+    G2.v = 'int(255*rand())'
+    G2.I = 'int(255*rand())'
+    G2.x = 'int(255*rand())'
+    G3 = NeuronGroup(9,
+                     '''v:1
+                        I:1
+                        x:1''',
+                     name="population_3")
+    G3.v = 'int(255*rand())'
+    G3.I = 'int(255*rand())'
+    G3.x = 'int(255*rand())'
+    S = Synapses(G1, G2)
+    S.connect(p=con_prob)
+    S1 = Synapses(G1, G3)
+    S1.connect(p=con_prob)
+    S2 = Synapses(G2, G3)
+    S2.connect(p=con_prob)
+    Sr = Synapses(G1, G1)
+    Sr.connect(p=con_prob)
+elif net_type == 2:
+    G1 = NeuronGroup(1024,
+                     '''v:1
+                        I:1
+                        x:1''',
+                     name="population_1")
+    G1.v = 'int(255*rand())'
+    G1.I = 'int(255*rand())'
+    G1.x = 'int(255*rand())'
+    G2 = NeuronGroup(1024,
+                     '''v:1
+                        I:1
+                        x:1''',
+                     name="population_2")
+    G2.v = 'int(255*rand())'
+    G2.I = 'int(255*rand())'
+    G2.x = 'int(255*rand())'
+    S = Synapses(G1, G2)
+    S.connect(p=con_prob)
 
 net = Network(collect())
 
 neu_id, syn_id, currents, voltages, traces = preprocess_network(net)
 
 # Hardware mapping
-neurons_per_core = 16
+if net_type == 1:
+    neurons_per_core = 16
+elif net_type == 2:
+    neurons_per_core = 512
 num_subcores = 8
 num_cores = int(np.ceil(len(neu_id)/neurons_per_core))
 num_state_vars = 3
